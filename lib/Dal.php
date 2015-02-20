@@ -1,10 +1,14 @@
-<?hh
+<?php
 
 namespace Lib {
 
     use Exception;
 
-    class Dal {
+    abstract class Dal {
+
+        private $_where = [];
+        private $_params = [];
+        private $_sort = [];
 
         /**
          * Constructor
@@ -23,21 +27,21 @@ namespace Lib {
          * Getter for _dbTable
          */
         public static function getDbTable() {
-            return self::$_dbTable;
+            return static::$_dbTable;
         }
 
         /**
          * Getter for _dbPrimaryKey
          */
         public static function getDbPrimaryKey() {
-            return self::$_dbPrimaryKey;
+            return isset(static::$_dbPrimaryKey) ? static::$_dbPrimaryKey : null;
         }
 
         /**
          * Getter for _dbMap
          */
         public static function getDbMap() {
-            return self::$_dbMap;
+            return static::$_dbMap;
         }
 
         /**
@@ -105,161 +109,8 @@ namespace Lib {
 
         }
 
-        /**
-         * Performs a generic query against the database
-         */
-        public static function query($conditions = null, $sort = null, $limit = null, $offset = null) {
-
-            $retVal = null;
-
-            $obj = self::_instantiateThisObject();
-            if (self::_verifyProperties($obj)) {
-
-                $query = 'SELECT `' . implode('`, `', array_values($obj->_dbMap)) . '` FROM `' . $obj->_dbTable . '`';
-
-                // Add WHERE
-                $params = null;
-                if (is_array($conditions)) {
-
-                    $where = [];
-                    $params = [];
-
-                    foreach ($conditions as $col => $info) {
-
-                        // Verify that the property actually exists in the map. Ensures constraint and prevents SQLi
-                        if (isset($obj->_dbMap[$col])) {
-                            if (is_array($info)) {
-
-                                foreach ($info as $operator => $options) {
-
-                                    $comparison = '=';
-                                    $oper = 'AND';
-                                    $value = ':' . $operator . '_' . $col;
-
-                                    switch (strtolower($operator)) {
-                                        case 'in':
-                                            $value = [];
-                                            for ($i = 0, $count = count($options); $i < $count; $i++) {
-                                                $param = ':' . $col . $i;
-                                                $params[$param] = $options[$i];
-                                                $value[] = $param;
-                                            }
-                                            $value = '(' . implode(', ', $value) . ')';
-                                            $comparison = 'IN';
-                                            break;
-
-                                        case 'lt':
-                                            $params[$value] = $options;
-                                            $comparison = '<';
-                                            break;
-
-                                        case 'gt':
-                                            $params[$value] = $options;
-                                            $comparison = '>';
-                                            break;
-
-                                        case 'like':
-                                            $params[$value] = $options;
-                                            $comparison = 'LIKE';
-                                            break;
-
-                                        case 'ne':
-                                            $params[$value] = $options;
-                                            $comparison = '!=';
-                                            break;
-
-                                        case 'null':
-                                            $comparison = 'IS' . ($options ? '' : ' NOT');
-                                            $value = 'NULL';
-                                            break;
-
-                                    }
-
-                                    $where[] = $oper . ' `' . $obj->_dbMap[$col] . '` ' . $comparison . ' ' . $value;
-
-                                }
-
-                            // If an array wasn't passed, assume testing equality on the value with AND logic
-                            } else {
-                                $where[] = 'AND `' . $obj->_dbMap[$col] . '` = :' . $col;
-                                $params[':' . $col] = $info;
-                            }
-                        } else {
-                            throw new Exception('Property "' . $col . '" does not exist in DB map for table "' . $obj->_dbTable . '"');
-                        }
-
-                    }
-
-                    // Remove the logic operator from the first item
-                    $where[0] = substr($where[0], strpos($where[0], ' ') + 1);
-
-                    $query .= ' WHERE ' . implode(' ', $where);
-
-                }
-
-                // Add ORDER BY
-                if (is_array($sort)) {
-                    $order = [];
-
-                    foreach ($sort as $col => $direction) {
-
-                        // Verify that the property actually exists in the map. Ensures constraint and prevents SQLi
-                        if (isset($obj->_dbMap[$col])) {
-                            switch (strtolower($direction)) {
-                                case 'desc':
-                                case 'descending':
-                                    $direction = 'DESC';
-                                    break;
-                                default:
-                                    $direction = 'ASC';
-                            }
-                            $order[] = '`' . $obj->_dbMap[$col] . '` ' . $direction;
-                        } else {
-                            throw new Exception('Property "' . $col . '" does not exist in DB map for table "' . $obj->_dbTable . '"');
-                        }
-                    }
-
-                    $query .= ' ORDER BY ' . implode(', ', $order);
-
-                }
-
-                // Add LIMIT
-                if (is_numeric($limit)) {
-                    $query .= ' LIMIT ';
-                    if (is_numeric($offset)) {
-                        $query .= $offset . ', ';
-                    }
-                    $query .= $limit;
-                }
-
-                $retVal = Db::Query($query, $params);
-
-            }
-
-            return $retVal;
-
-        }
-
-        public function eq(string $column, $value) {
-            echo $this->_getColumnNameFromProperty($column);
-        }
-
-        /**
-         * Performs a query but resolves to database result to an array of objects
-         */
-        public static function queryReturnAll($conditions = null, $sort = null, $limit = null, $offset = null) {
-            $retVal = null;
-            $result = self::query($conditions, $sort, $limit, $offset);
-            if ($result && $result->count > 0) {
-
-                $retVal = [];
-                $className = get_called_class();
-                while ($row = Db::Fetch($result)) {
-                    $retVal[] = new $className($row);
-                }
-
-            }
-            return $retVal;
+        public static function query() {
+            return new DbQuery(self::getDbTable(), self::getDbMap(), self::getDbPrimaryKey());
         }
 
         /**
@@ -341,17 +192,6 @@ namespace Lib {
             } else {
                 throw new Exception('Class must have "_dbTable", "_dbMap", and "_dbPrimaryKey" properties to use method "getById"');
             }
-        }
-
-        private function _getColumnNameFromProperty(string $property) {
-            $className = get_called_class();
-            $class = new ReflectionClass($className);
-            $property = $class->getProperty($property);
-            $retVal = null;
-            if ($property) {
-                $retVal = $property->getAttribute('DbColumn');
-            }
-            return $retVal;
         }
 
         /**
