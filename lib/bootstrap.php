@@ -32,11 +32,17 @@ namespace Lib {
 		private static function classLoader($library) {
 
 			$library = explode('\\', $library);
+
+			// Pop off the actual class name to preserve casing
+			$fileName = array_pop($library);
+
+			// Find the path to the namespace
 			$filePath = '.';
-			foreach ($library as $piece) {
-				$filePath .= '/' . strtolower($piece);
+			foreach ($library as $namespace) {
+				$filePath .= '/' . strtolower($namespace);
 			}
-			$filePath .= '.php';
+
+			$filePath .= '/' . $fileName . '.php';
 			if (is_readable($filePath)) {
 				require_once($filePath);
 			}
