@@ -28,25 +28,29 @@ namespace Lib {
 
 	// Include the DX API libraries
 	require_once('./lib/dxapi.php');
-	require_once('./vendor/autoload.php');
+
+	if (is_readable('./vendor/autoload.php')) {
+		require_once('./vendor/autoload.php');
+	}
+
 	Api\DxApi::initialize();
 
 	class Dx {
-		
+
 		private static $_initialized = false;
-		
+
 		private static function initialize() {
 			if (!self::$_initialized) {
 				spl_autoload_register('Lib\\Dx::classLoader');
 				self::$_initialized = true;
 			}
 		}
-		
+
 		/**
 		 * Class auto loader
 		 */
 		private static function classLoader($library) {
-			
+
 			$library = explode('\\', $library);
 			$filePath = '.';
 			foreach ($library as $piece) {
@@ -56,27 +60,27 @@ namespace Lib {
 			if (is_readable($filePath)) {
 				require_once($filePath);
 			}
-			
+
 		}
-		
+
 		/**
 		 * Makes an internal or external API call based upon whether an API url was passed
 		 */
-		public static function call($module, $method, $params = null, $cache = 600, $apiUri = null) {		
-		
+		public static function call($module, $method, $params = null, $cache = 600, $apiUri = null) {
+
 			self::initialize();
 			$retVal = null;
-			
+
 			if ($apiUri === null) {
 				$retVal = self::_internal($module, $method, $params, $cache);
 			} else {
 				$retVal = self::_external($module, $method, $params, $cache, $apiUri);
 			}
-			
+
 			return $retVal;
-			
+
 		}
-		
+
 		/**
 		 * Makes a POST request to the API
 		 */
@@ -85,7 +89,7 @@ namespace Lib {
 			$retVal = Api\DxApi::handleRequest($module, $method, $params, $object);
 			return $retVal;
 		}
-		
+
 		/**
 		 * Wrapper to get a KVP via the API
 		 * @param string $key Name of option to retrieve
@@ -95,7 +99,7 @@ namespace Lib {
 			$obj = self::call('kvp', 'get', array('key'=>$key));
 			return $obj->body;
 		}
-		
+
 		/**
 		 * Wrapper to set a KVP
 		 * @param string $key Name of option to set
@@ -105,7 +109,7 @@ namespace Lib {
 		public static function setOption($key, $value) {
 			return self::post('kvp', 'set', array('key'=>$key), $value);
 		}
-		
+
 		/**
 		 * Makes an internal API call
 		 */
@@ -120,14 +124,14 @@ namespace Lib {
 			}
 			return $retVal;
 		}
-		
+
 		/**
 		 * Makes an API call to another instance of DxApi via REST
 		 */
 		private static function _external($module, $method, $params, $cache, $apiUri) {
-			
+
 			global $_apiHits;
-			
+
 			$qs = '/index.php?type=json&method=' . $module . '.' . $method;
 
 			// Build the query string
@@ -152,7 +156,7 @@ namespace Lib {
 
 			// Return the request
 			return $retVal;
-		
+
 		}
 
 	}
