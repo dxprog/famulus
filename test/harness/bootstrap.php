@@ -1,14 +1,7 @@
 <?php
 
+define('CACHE_PREFIX', 'Prefix');
+
 // RedditBooru Unit Test Harness
-
-if (!defined('USE_MOCK_DB')) {
-    define('USE_MOCK_DB', false);
-}
-
-if (USE_MOCK_DB) {
-    require('test/test_db.php');
-}
-
-chdir('/var/www/reddit-booru');
-require('lib/aal.php');
+require('test/harness/test_db.php');
+require('lib/bootstrap.php');
